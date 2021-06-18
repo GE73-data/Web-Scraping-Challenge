@@ -1,33 +1,125 @@
-import datetime as dt
+import pymongo
+from pymongo import MongoClient
+import pandas as pd
+import time
+import requests
+from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup as bs
+from splinter import Browser
 
 
-def scrape_all():
+def scrape():
+    # Mars News
+    # URL of page to be scraped
+    url = 'https://redplanetscience.com/'
 
-    news_title = 'Testing Title'
-    news_paragraph = 'Testing Paragraph'
-    featured_image = 'https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg'
-    mars_facts = 'Testing Facts'
-    hemispheres_list_of_dicts = [
-        {"title": "Title of Hemisphere Image",
-         "img_url": 'https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg'},
+    # Retrieve page with the requests module
+    response = requests.get(url)
 
-        {"title": "Title of Hemisphere Image",
-         "img_url": 'https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg'},
+    # Create BeautifulSoup object; parse with 'html.parser'
+    news_soup = bs(response.text, 'html.parser')    
 
-        {"title": "Title of Hemisphere Image",
-         "img_url": 'https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg'},
+# Scrape the [NASA Mars News Site] and collect the latest news title and paragraph
+    news_title = news_soup.find("div", class_="content_title").text
+    news_paragraph = news_soup.find("div", class_="article_teaser_body").text
 
-        {"title": "Title of Hemisphere Image",
-         "img_url": 'https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg'},
-    ]
+# Characteristics of Mars
 
-    scraped_data = {
-        "news_title": news_title,
-        "news_paragraph": news_paragraph,
-        "featured_image": featured_image,
-        "facts": mars_facts,
-        "hemispheres": hemispheres_list_of_dicts,
-        "last_modified": dt.datetime.now()
+    # Visit the Mars Facts webpage
+    facts_url = 'https://galaxyfacts-mars.com'
+
+    # Retrieve page with the requests module
+    response1 = requests.get(facts_url)
+
+    # Create BeautifulSoup object and parse
+    soup = bs(response.text, 'html.parser')    
+
+    # Read the website HTML and convert to a pandas datframe
+    mars_df = pd.read_html(facts_url)
+    mars_df = mars_df[0]
+    mars_df.columns = ['Characteristic', 'Fact']
+    # Remove numerical index value
+    mars_df.set_index('Characteristic', inplace=True)
+
+    # Save HTML file
+    mars_html = mars_df.to_html(header=False, index=False)
+
+# Mars Hemispheres Images
+
+# Visit the USGS Astrogeology site:
+    #  (https://astrogeology.usgs.gov/search/results?q=hemisphere+enhanced&k1=target&v1=Mars) to obtain high resolution images for each of Mar's hemispheres.
+    hemis_url = "https://astrogeology.usgs.gov/search/results?q=hemisphere+enhanced&k1=target&v1=Mars"
+
+    # Setup splinter
+    executable_path = {'executable_path': ChromeDriverManager().install()}
+    browser = Browser('chrome', **executable_path, headless=False)
+
+    # URLs
+    hemis_url = 'https://astrogeology.usgs.gov/search/results?q=hemisphere+enhanced&k1=target&v1=Mars'
+    home_url = 'https://astrogeology.usgs.gov'
+
+    # Create BeautifulSoup object and parse
+    browser.visit(hemis_url)
+    html = browser.html
+    soup = bs(html, 'html.parser')    
+    # soup = bs(html, 'html.parser')  #HTML parser
+
+    # Finding the hemispheres data through their HTML divisions
+    mars_hemispheres = soup.find('div', class_='collapsible results')
+    hemispheres = mars_hemispheres.find_all('div', class_='item')
+
+    # Empty list for hemispheres' Title and image_urls
+    mars_images = []
+
+    # Iterate through each hemisphere data
+    for hemi in hemispheres:
+
+        # Get Titles
+        hemisphere = hemi.find('div', class_="description")
+        title = hemisphere.h3.text
+        title = title.strip('Enhanced')
+
+        # Get Images
+        end_link = hemisphere.a["href"]
+        browser.visit(home_url + end_link)
+
+        image_html = browser.html
+        image_soup = bs(image_html, 'html.parser')
+
+        image_link = image_soup.find('div', class_='downloads')
+        image_url = image_link.find('li').a['href']
+
+        # Storage Dictionary
+        image_dict = {}
+        image_dict['Title'] = title
+        image_dict['ImageURL'] = image_url
+
+        # Add data to empty list "mars_images"
+        mars_images.append(image_dict)
+
+    # Close browser window
+    browser.quit()
+
+# Create a summary dictionary of all scraped data
+    summary_data = {
+        'News from the Red Planet': news_title,
+        'News Summary': news_paragraph,
+        'Characteristics': mars_html,
+        'Images': mars_images
     }
+    return (summary_data)
 
-    return scraped_data
+import pymongo
+from pymongo import MongoClient
+# Initialize PyMongo to work with MongoDBs
+conn = 'mongodb://localhost:27017'
+client = pymongo.MongoClient(conn)
+
+# Define database and collection
+mars_db = client.mars_db
+collection = mars_db.summary_data
+#collection.insert_one(summary_data)
+
+mars_data = mars_db.summary_data.find()
+for data in mars_data:
+    print(data)
