@@ -20,6 +20,14 @@
     </div>
     <h2>Mars News:{{mars.news_title}}</h2>
     <p>{{mars.news_para}}</p>
+    <img src="{{mars.featured_image}}" alt="">
+    <div>
+      <h2>Mars Facts</h2>
+      {{mars.mars_facts|safe}}
+    </div>
+    <h3>Mars Hemispheres</h3>
+    <div class="wide-image" src="{{mars.hemisphere_image_urls}}" alt="">
+  </div>
   </div>
   </div>
   </div>
